@@ -45,6 +45,7 @@ const esc = (value = '') => String(value).replace(/[&<>"]/g, (char) => ({ '&': '
 const releaseName = (id) => state.releases.find((release) => release.id === id)?.title || 'Sin release';
 const options = (items, selected = '') => items.map((item) => `<option ${item === selected ? 'selected' : ''} value="${esc(item)}">${esc(item)}</option>`).join('');
 const releaseOptions = () => `<option value="">Sin asociar</option>${state.releases.map((release) => `<option value="${release.id}">${esc(release.title)}</option>`).join('')}`;
+const trashButton = (type, id, label = 'Eliminar') => `<button class="icon-button danger-button" type="button" data-delete="${type}" data-id="${id}" title="${label}" aria-label="${label}">🗑️</button>`;
 
 function stats() {
   const monthExpenses = state.expenses.filter((expense) => expense.date?.startsWith(month));
@@ -78,7 +79,7 @@ const sections = {
     const { monthTotal, remaining, ratio } = stats();
     const next = [...state.releases].filter((release) => release.date >= today).sort((a, b) => a.date.localeCompare(b.date)).slice(0, 4);
     const pending = state.contents.filter((item) => item.status !== 'publicado');
-    const tasks = state.releases.flatMap((release) => release.checklist.map((task) => ({ task, release: release.title, date: release.date }))).slice(0, 6);
+    const tasks = state.releases.flatMap((release) => (release.checklist || []).map((task) => ({ task, release: release.title, date: release.date }))).slice(0, 6);
     return `<div class="section-grid">
       ${metric('◍', 'Gasto musical del mes', money.format(monthTotal), `Límite: ${money.format(state.monthlyLimit)}`, ratio)}
       ${metric('◌', 'Dinero restante', money.format(remaining), `${Math.round(ratio)}% del límite usado`)}
@@ -86,7 +87,7 @@ const sections = {
       ${metric('▣', 'Contenidos pendientes', pending.length, 'Ideas, grabados, editados o listos')}
       ${panel('Próximos releases', '◎', next.length ? `<div class="release-row-list">${next.map(releaseRow).join('')}</div>` : empty('No hay lanzamientos próximos.'), 'wide')}
       ${panel('Tareas urgentes', '✓', tasks.length ? tasks.map((item) => `<div class="task-row"><span>${esc(item.task)}</span><small>${esc(item.release)} · ${item.date}</small></div>`).join('') : empty('Sin tareas todavía.'))}
-      ${panel('Contenido pendiente', '✦', pending.length ? pending.slice(0, 5).map((item) => `<div class="content-row"><span class="badge">${esc(item.status)}</span><strong>${esc(item.title)}</strong><span>${esc(item.network)} · ${esc(releaseName(item.releaseId))}</span><small>${esc(item.publishDate)}</small></div>`).join('') : empty('Tu calendario está limpio.'), 'wide')}
+      ${panel('Contenido pendiente', '✦', pending.length ? pending.slice(0, 5).map((item) => `<div class="content-row"><span class="badge">${esc(item.status)}</span><strong>${esc(item.title)}</strong><span>${esc(item.network)} · ${esc(releaseName(item.releaseId))}</span><small>${esc(item.publishDate)}</small>${trashButton('content', item.id, 'Eliminar contenido')}</div>`).join('') : empty('Tu calendario está limpio.'), 'wide')}
     </div>`;
   },
   releases() {
@@ -105,13 +106,13 @@ const sections = {
     const byRelease = data.monthExpenses.reduce((acc, expense) => { const name = releaseName(expense.releaseId); acc[name] = (acc[name] || 0) + Number(expense.amount || 0); return acc; }, {});
     return `<div class="two-column">
       ${panel('Control mensual', '◍', `<label class="field"><span>Límite mensual de gasto</span><input id="monthly-limit" type="number" value="${state.monthlyLimit}"></label><div class="budget-card ${data.ratio >= 100 ? 'danger' : data.ratio >= 80 ? 'warning' : ''}"><div><span>Usado este mes</span><strong>${money.format(data.monthTotal)}</strong><small>Restante: ${money.format(data.remaining)}</small></div><div class="progress"><i style="width:${Math.min(data.ratio, 100)}%"></i></div>${data.ratio >= 100 ? '<p>Has superado el límite mensual. Revisa campañas y pagos pendientes.</p>' : data.ratio >= 80 ? '<p>Estás cerca del límite. Prioriza gastos críticos del lanzamiento.</p>' : ''}</div>${chart('Gasto por categoría', byCategory)}${chart('Gasto por release', byRelease)}`)}
-      ${panel('Nuevo gasto musical', '+', expenseForm() + `<div class="table-list">${state.expenses.map((expense) => `<div class="expense-row"><span class="badge">${esc(expense.status)}</span><strong>${esc(expense.concept)}</strong><span>${esc(expense.category)} · ${esc(releaseName(expense.releaseId))}</span><b>${money.format(expense.amount)}</b></div>`).join('')}</div>`, 'form-panel')}
+      ${panel('Nuevo gasto musical', '+', expenseForm() + `<div class="table-list">${state.expenses.map((expense) => `<div class="expense-row"><span class="badge">${esc(expense.status)}</span><strong>${esc(expense.concept)}</strong><span>${esc(expense.category)} · ${esc(releaseName(expense.releaseId))}</span><b>${money.format(expense.amount)}</b>${trashButton('expense', expense.id, 'Eliminar gasto')}</div>`).join('')}</div>`, 'form-panel')}
     </div>`;
   },
   content() {
     return `<div class="two-column">
       ${panel('Nueva pieza de contenido', '+', contentForm(), 'form-panel')}
-      ${panel('Calendario creativo', '▣', `<div class="content-board">${contentStates.map((status) => `<div class="kanban-column"><h3>${status}</h3>${state.contents.filter((item) => item.status === status).map((item) => `<article class="kanban-card"><span class="badge">${esc(item.network)}</span><strong>${esc(item.title)}</strong><span>${esc(releaseName(item.releaseId))}</span><small>${esc(item.publishDate || 'Sin fecha')}</small><p>${esc(item.caption)}</p></article>`).join('')}</div>`).join('')}</div>`)}
+      ${panel('Calendario creativo', '▣', `<div class="content-board">${contentStates.map((status) => `<div class="kanban-column"><h3>${status}</h3>${state.contents.filter((item) => item.status === status).map((item) => `<article class="kanban-card"><div class="card-actions"><span class="badge">${esc(item.network)}</span>${trashButton('content', item.id, 'Eliminar contenido')}</div><strong>${esc(item.title)}</strong><span>${esc(releaseName(item.releaseId))}</span><small>${esc(item.publishDate || 'Sin fecha')}</small><p>${esc(item.caption)}</p></article>`).join('')}</div>`).join('')}</div>`)}
     </div>`;
   },
 };
@@ -128,13 +129,34 @@ function expenseForm() { return `<form id="expense-form" class="form-grid">${fie
 function contentForm() { return `<form id="content-form" class="form-grid">${field('title', 'Título')} ${select('network', 'Red social objetivo', networks)}<label class="field"><span>Release asociado opcional</span><select name="releaseId">${releaseOptions()}</select></label>${select('status', 'Estado', contentStates)} ${field('publishDate', 'Fecha prevista', 'date')} ${textarea('caption', 'Caption')} ${textarea('hashtags', 'Hashtags')} ${field('finalLink', 'Enlace al archivo final o carpeta', 'text', '', 'full')} ${textarea('notes', 'Notas', 'full')}<button class="primary-button full">+ Guardar contenido</button></form>`; }
 function generatorHtml() { return `<div class="mini-form">${field('ideaGenre', 'Género', 'text', state.ideaGenre)}${field('ideaMood', 'Mood', 'text', state.ideaMood)}${field('ideaGoal', 'Objetivo', 'text', state.ideaGoal)}</div><div class="idea-list">${ideas().map((idea) => `<p>${esc(idea)}</p>`).join('')}</div>`; }
 function ideas() { return [`POV visual: cómo se siente ${state.ideaMood || 'la emoción'} cuando entra el hook de ${state.ideaGenre || 'tu sonido'}. Objetivo: ${state.ideaGoal || 'pre-save'}.`, `Storytime: cuenta en 30 segundos la línea más honesta y termina con CTA a ${state.ideaGoal || 'escuchar'}.`, 'De demo a final: compara la primera maqueta con el master y explica una decisión creativa.', `Reto para fans: invita a usar el audio en una escena que represente ${state.ideaMood || 'el mood'}.`, `Behind the scenes: muestra portada, sesión vocal o presupuesto y conecta el proceso con ${state.ideaGenre || 'el género'}.`]; }
-function releaseRow(release) { return `<article class="release-row"><div class="cover placeholder">♫</div><div><strong>${esc(release.title)}</strong><span>${esc(release.artist)} · ${esc(release.genre)}</span></div><span class="badge">${esc(release.status)}</span><small>${esc(release.date)}</small></article>`; }
-function releaseCard(release) { return `<article class="release-card"><div class="cover placeholder">♫</div><div><span class="badge">${esc(release.releaseType || 'single')}</span><h3>${esc(release.title)}</h3><p>${esc(release.artist)} · ${esc(release.genre)} · ${esc(release.mood)}</p><small>${esc(release.date)} · ${money.format(release.budget || 0)}</small><details><summary>Plan, pitch e ideas</summary><p>${esc(release.editorialPitch)}</p><pre>${esc(release.marketingPlan)}</pre><ul>${(release.tiktokIdeas || []).map((idea) => `<li>${esc(idea)}</li>`).join('')}</ul></details></div></article>`; }
+function releaseRow(release) { return `<article class="release-row"><div class="cover placeholder">♫</div><div><strong>${esc(release.title)}</strong><span>${esc(release.artist)} · ${esc(release.genre)}</span></div><span class="badge">${esc(release.status)}</span><small>${esc(release.date)}</small>${trashButton('release', release.id, 'Eliminar release')}</article>`; }
+function releaseCard(release) { return `<article class="release-card"><div class="cover placeholder">♫</div><div><div class="card-actions"><span class="badge">${esc(release.releaseType || 'single')}</span>${trashButton('release', release.id, 'Eliminar release')}</div><h3>${esc(release.title)}</h3><p>${esc(release.artist)} · ${esc(release.genre)} · ${esc(release.mood)}</p><small>${esc(release.date)} · ${money.format(release.budget || 0)}</small><details><summary>Plan, pitch e ideas</summary><p>${esc(release.editorialPitch)}</p><pre>${esc(release.marketingPlan)}</pre><ul>${(release.tiktokIdeas || []).map((idea) => `<li>${esc(idea)}</li>`).join('')}</ul></details></div></article>`; }
 function chart(title, data) { const entries = Object.entries(data); const max = Math.max(...entries.map(([, value]) => value), 1); return `<div class="chart"><h3>${title}</h3>${entries.length ? entries.map(([label, value]) => `<div class="bar-row"><span>${esc(label)}</span><div><i style="width:${(value / max) * 100}%"></i></div><b>${money.format(value)}</b></div>`).join('') : empty('Sin datos este mes.')}</div>`; }
 function group(items, key) { return items.reduce((acc, item) => { const label = item[key] || 'Sin categoría'; acc[label] = (acc[label] || 0) + Number(item.amount || 0); return acc; }, {}); }
 function formObject(form) { return Object.fromEntries(new FormData(form).entries()); }
 
+function deleteItem(type, id) {
+  const labels = { release: 'este release', expense: 'este gasto', content: 'esta pieza de contenido' };
+  if (!confirm(`¿Seguro que quieres eliminar ${labels[type] || 'este elemento'}?`)) return;
+
+  if (type === 'release') {
+    state.releases = state.releases.filter((release) => release.id !== id);
+    state.expenses = state.expenses.map((expense) => expense.releaseId === id ? { ...expense, releaseId: '' } : expense);
+    state.contents = state.contents.map((item) => item.releaseId === id ? { ...item, releaseId: '' } : item);
+  }
+  if (type === 'expense') state.expenses = state.expenses.filter((expense) => expense.id !== id);
+  if (type === 'content') state.contents = state.contents.filter((item) => item.id !== id);
+  persist();
+  render();
+}
+
 window.addEventListener('click', (event) => {
+  const deleteButton = event.target.closest('[data-delete]');
+  if (deleteButton) {
+    deleteItem(deleteButton.dataset.delete, deleteButton.dataset.id);
+    return;
+  }
+
   const button = event.target.closest('[data-section]');
   if (!button) return;
   state.active = button.dataset.section;
